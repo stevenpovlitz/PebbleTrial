@@ -6,6 +6,11 @@ InverterLayer *inv_layer;
 
 char buffer[] = "00:00";
 
+//creates handler function to receive events
+static void tap_handler(AccelAxisType axis, int32_t direction) { 
+  printf("tap_handler has been run!");
+}
+
 void tick_handler(struct tm *tick_time, TimeUnits units_changed){ //updates watchface on minute
   // update watchface here
   strftime(buffer, sizeof("00:00"), "%H:%M", tick_time);
@@ -53,6 +58,7 @@ void init() { // set up app
     .unload = window_unload,
   });	
   tick_timer_service_subscribe(MINUTE_UNIT, (TickHandler) tick_handler);
+  accel_tap_service_subscribe(tap_handler); // subscribe to accel tap event service
   window_stack_push(window, true);
 }
 

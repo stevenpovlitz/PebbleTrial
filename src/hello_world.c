@@ -10,21 +10,28 @@
 
 static Window *s_main_window;
 static TextLayer *s_output_layer;
+int gatherStats = 0;
+int accelSamples [100][4]; 
 
 static void data_handler(AccelData *data, uint32_t num_samples) {
   // Long lived buffer
   static char s_buffer[128];
-
+  
   // Compose string of all data
-  snprintf(s_buffer, sizeof(s_buffer), 
-    "N X,Y,Z\n0 %d,%d,%d\n1 %d,%d,%d\n2 %d,%d,%d", 
-    data[0].x, data[0].y, data[0].z, 
-    data[1].x, data[1].y, data[1].z, 
-    data[2].x, data[2].y, data[2].z
-  );
-
-  //Show the data
-  text_layer_set_text(s_output_layer, s_buffer);
+  if (gatherStats < 100){
+    accelSamples[gatherStats][0] = data[0].x;
+    gatherStats++;
+    
+    //data[0].timestamp is a "uint64_t", which I just cast to a long for convenience
+    printf("X:%5d, Y:%5d, Z:%5d, timestamp:%12ld", data[0].x, data[0].y, data[0].z, (long)data[0].timestamp);
+    snprintf(s_buffer, sizeof(s_buffer), 
+      "X,Y,Z\n> %d,%d,%d", 
+      data[0].x, data[0].y, data[0].z
+    );
+  
+    //Show the data
+    text_layer_set_text(s_output_layer, s_buffer);
+  }
 }
 
 static void tap_handler(AccelAxisType axis, int32_t direction) {
@@ -85,7 +92,7 @@ static void init() {
     accel_tap_service_subscribe(tap_handler);
   } else {
     // Subscribe to the accelerometer data service
-    int num_samples = 3;
+    int num_samples = 1;
     accel_data_service_subscribe(num_samples, data_handler);
 
     // Choose update rate

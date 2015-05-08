@@ -1,75 +1,111 @@
+/*
+ * main.c
+ * Constructs a Window housing an output TextLayer to show data from 
+ * either modes of operation of the accelerometer.
+ */
+
 #include <pebble.h>
 
-Window *window; // the pointer for the Window element
-TextLayer *text_layer;
-InverterLayer *inv_layer;
+#define TAP_NOT_DATA false
 
-char buffer[] = "00:00";
+static Window *s_main_window;
+static TextLayer *s_output_layer;
 
-//creates handler function to receive events
-static void tap_handler(AccelAxisType axis, int32_t direction) { 
-  printf("tap_handler has been run!");
+static void data_handler(AccelData *data, uint32_t num_samples) {
+  // Long lived buffer
+  static char s_buffer[128];
+
+  // Compose string of all data
+  snprintf(s_buffer, sizeof(s_buffer), 
+    "N X,Y,Z\n0 %d,%d,%d\n1 %d,%d,%d\n2 %d,%d,%d", 
+    data[0].x, data[0].y, data[0].z, 
+    data[1].x, data[1].y, data[1].z, 
+    data[2].x, data[2].y, data[2].z
+  );
+
+  //Show the data
+  text_layer_set_text(s_output_layer, s_buffer);
 }
 
-void tick_handler(struct tm *tick_time, TimeUnits units_changed){ //updates watchface on minute
-  // update watchface here
-  strftime(buffer, sizeof("00:00"), "%H:%M", tick_time);
-  
-  // Change the TextLayer to show the new time!
-  text_layer_set_text(text_layer, buffer);
+static void tap_handler(AccelAxisType axis, int32_t direction) {
+  switch (axis) {
+  case ACCEL_AXIS_X:
+    if (direction > 0) {
+      text_layer_set_text(s_output_layer, "X axis positive.");
+    } else {
+      text_layer_set_text(s_output_layer, "X axis negative.");
+    }
+    break;
+  case ACCEL_AXIS_Y:
+    if (direction > 0) {
+      text_layer_set_text(s_output_layer, "Y axis positive.");
+    } else {
+      text_layer_set_text(s_output_layer, "Y axis negative.");
+    }
+    break;
+  case ACCEL_AXIS_Z:
+    if (direction > 0) {
+      text_layer_set_text(s_output_layer, "Z axis positive.");
+    } else {
+      text_layer_set_text(s_output_layer, "Z axis negative.");
+    }
+    break;
+  }
 }
 
-void window_load(Window *window){
-  //Time layer
-	text_layer = text_layer_create(GRect(0, 53, 132, 168));
-	text_layer_set_background_color(text_layer, GColorClear);
-	text_layer_set_text_color(text_layer, GColorBlack);
-	text_layer_set_text_alignment(text_layer, GTextAlignmentCenter);
-	text_layer_set_font(text_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
-	
-	layer_add_child(window_get_root_layer(window), (Layer*) text_layer);
-	
-	//Inverter layer
-	inv_layer = inverter_layer_create(GRect(0, 50, 144, 62));
-	layer_add_child(window_get_root_layer(window), (Layer*) inv_layer);
-	
-	//Get a time structure so that the face doesn't start blank
-	struct tm *t;
-	time_t temp;	
-	temp = time(NULL);	
-	t = localtime(&temp);	
-	
-	//Manually call the tick handler when the window is loading
-	tick_handler(t, MINUTE_UNIT); 
+static void main_window_load(Window *window) {
+  Layer *window_layer = window_get_root_layer(window);
+  GRect window_bounds = layer_get_bounds(window_layer);
+
+  // Create output TextLayer
+  s_output_layer = text_layer_create(GRect(5, 0, window_bounds.size.w - 10, window_bounds.size.h));
+  text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
+  text_layer_set_text(s_output_layer, "No data yet.");
+  text_layer_set_overflow_mode(s_output_layer, GTextOverflowModeWordWrap);
+  layer_add_child(window_layer, text_layer_get_layer(s_output_layer));
 }
 
-void window_unload(Window *window){
-  //We will safely destroy the Window's elements here!
-  text_layer_destroy(text_layer);
- 
-  inverter_layer_destroy(inv_layer);
+static void main_window_unload(Window *window) {
+  // Destroy output TextLayer
+  text_layer_destroy(s_output_layer);
 }
 
-void init() { // set up app
-  // Initialize the app elements here!
-	window = window_create();
-  window_set_window_handlers(window, (WindowHandlers) {
-    .load = window_load,
-    .unload = window_unload,
-  });	
-  tick_timer_service_subscribe(MINUTE_UNIT, (TickHandler) tick_handler);
-  accel_tap_service_subscribe(tap_handler); // subscribe to accel tap event service
-  window_stack_push(window, true);
+static void init() {
+  // Create main Window
+  s_main_window = window_create();
+  window_set_window_handlers(s_main_window, (WindowHandlers) {
+    .load = main_window_load,
+    .unload = main_window_unload
+  });
+  window_stack_push(s_main_window, true);
+
+  // Use tap service? If not, use data service
+  if (TAP_NOT_DATA) {
+    // Subscribe to the accelerometer tap service
+    accel_tap_service_subscribe(tap_handler);
+  } else {
+    // Subscribe to the accelerometer data service
+    int num_samples = 3;
+    accel_data_service_subscribe(num_samples, data_handler);
+
+    // Choose update rate
+    accel_service_set_sampling_rate(ACCEL_SAMPLING_10HZ);
+  }
 }
 
-void deinit() { // Frees up memory once app is done running
-  // De-initialize the app elements here!
-  tick_timer_service_unsubscribe();
-  window_destroy(window);
+static void deinit() {
+  // Destroy main Window
+  window_destroy(s_main_window);
+
+  if (TAP_NOT_DATA) {
+    accel_tap_service_unsubscribe();
+  } else {
+    accel_data_service_unsubscribe();
+  }
 }
 
 int main(void) {
-	init();
-	app_event_loop();
-	deinit();
+  init();
+  app_event_loop();
+  deinit();
 }

@@ -15,7 +15,7 @@ int gatherStats = 0;
 int accelSamples [100][4]; //fourth is for absolute sum of three places
 long accelTimeStamp [100]; //is a long actually big enough to hold these? I dunno, seems to work now
 
-static void data_process(){ // only calculates beginning of longest run at the moment, 
+static void data_process(){ // only calculates beginning of longest run at the moment
   // should for end of longest run too
   int longestRun = 0;
   int thisRun = 0;
@@ -24,7 +24,7 @@ static void data_process(){ // only calculates beginning of longest run at the m
   bool firstTime = true; 
   // loop through whole data set, find longest run of decreasing values
   for(int i = 0; i < 100 - 3; i += 2){
-    // checks if 3 consecutive values are decreasing
+    // checks if 3 consecutive values are increasing
     if (accelSamples[i][3] < accelSamples[i+1][3] &&
         accelSamples[i+1][3] < accelSamples[i+2][3]) {
       thisRun += 2;
@@ -44,7 +44,7 @@ static void data_process(){ // only calculates beginning of longest run at the m
     }
   }
   // output results of data
-  printf("Run Length (10 samples a second): %5d\tLongest run start time: %10li", 
+  printf("Run Length (25 samples a second): %5d\tLongest run start time: %10li", 
          longestRun, accelTimeStamp[longIndex]);
 }
 
@@ -61,8 +61,8 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
     accelTimeStamp [gatherStats] = data[0].timestamp;
     
     //data[0].timestamp is a "uint64_t", which I just cast to a long for convenience
-    printf("X:%5d, Y:%5d, Z:%5d, timestamp:%10li, abs:%5d", 
-           data[0].x, data[0].y, data[0].z, (long)data[0].timestamp, accelSamples[gatherStats][3]);
+    printf("time,X,Y,Z,abs:%10li\t%5d\t%5d\t%5d\t%5d", 
+           (long)data[0].timestamp, data[0].x, data[0].y, data[0].z,accelSamples[gatherStats][3]);
     snprintf(s_buffer, sizeof(s_buffer), 
       "X,Y,Z\n> %d,%d,%d", 
       data[0].x, data[0].y, data[0].z
@@ -144,7 +144,7 @@ static void init() {
     accel_data_service_subscribe(num_samples, data_handler);
 
     // Choose update rate
-    accel_service_set_sampling_rate(ACCEL_SAMPLING_10HZ);
+    accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
   }
 }
 

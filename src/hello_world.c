@@ -5,13 +5,48 @@
  */
 
 #include <pebble.h>
-
+#include <stdlib.h> // for abs() method
 #define TAP_NOT_DATA false
 
 static Window *s_main_window;
 static TextLayer *s_output_layer;
+// should this be declared in main, to save memory?
 int gatherStats = 0;
-int accelSamples [100][4]; 
+int accelSamples [100][4]; //fourth is for absolute sum of three places
+long accelTimeStamp [100]; //is a long actually big enough to hold these? I dunno, seems to work now
+
+static void data_process(){ // only calculates beginning of longest run at the moment, 
+  // should for end of longest run too
+  int longestRun = 0;
+  int thisRun = 0;
+  int longIndex = 0;
+  int thisIndex = 0;
+  bool firstTime = true; 
+  // loop through whole data set, find longest run of decreasing values
+  for(int i = 0; i < 100 - 3; i += 2){
+    // checks if 3 consecutive values are decreasing
+    if (accelSamples[i][3] < accelSamples[i+1][3] &&
+        accelSamples[i+1][3] < accelSamples[i+2][3]) {
+      thisRun += 2;
+      if (firstTime == true){
+        thisIndex = i; // start of run value set only if its the start of a run
+        firstTime = false;
+      }
+    }
+    else {
+      firstTime = true;
+      if (thisRun > longestRun) {
+        longestRun = thisRun;
+        longIndex = thisIndex;
+        thisRun = 0;
+        thisIndex = 0;
+      }
+    }
+  }
+  // output results of data
+  printf("Run Length (10 samples a second): %5d\tLongest run start time: %10li", 
+         longestRun, accelTimeStamp[longIndex]);
+}
 
 static void data_handler(AccelData *data, uint32_t num_samples) {
   // Long lived buffer
@@ -20,10 +55,14 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   // Compose string of all data
   if (gatherStats < 100){
     accelSamples[gatherStats][0] = data[0].x;
-    gatherStats++;
+    accelSamples[gatherStats][1] = data[0].y;
+    accelSamples[gatherStats][2] = data[0].z; 
+    accelSamples[gatherStats][3] = abs(data[0].x) + abs(data[0].y) + abs(data[0].z);
+    accelTimeStamp [gatherStats] = data[0].timestamp;
     
     //data[0].timestamp is a "uint64_t", which I just cast to a long for convenience
-    printf("X:%5d, Y:%5d, Z:%5d, timestamp:%12ld", data[0].x, data[0].y, data[0].z, (long)data[0].timestamp);
+    printf("X:%5d, Y:%5d, Z:%5d, timestamp:%10li, abs:%5d", 
+           data[0].x, data[0].y, data[0].z, (long)data[0].timestamp, accelSamples[gatherStats][3]);
     snprintf(s_buffer, sizeof(s_buffer), 
       "X,Y,Z\n> %d,%d,%d", 
       data[0].x, data[0].y, data[0].z
@@ -31,6 +70,15 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   
     //Show the data
     text_layer_set_text(s_output_layer, s_buffer);
+    gatherStats++; // increment index counter
+  }
+  else {
+    // maybe later I can add some text to print out to the user (ie watch screen)
+    accel_data_service_unsubscribe();
+    // unsubscribe from accel data, saves battery here
+    printf("Done collecting data");
+    //implements calculation function, uses the data
+    data_process();
   }
 }
 
@@ -107,7 +155,8 @@ static void deinit() {
   if (TAP_NOT_DATA) {
     accel_tap_service_unsubscribe();
   } else {
-    accel_data_service_unsubscribe();
+    // accel_data_service_unsubscribe();
+    // moved above for when 100 samples (10 seconds) is hit for battery concerns
   }
 }
 

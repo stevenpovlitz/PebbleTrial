@@ -7,23 +7,24 @@
 #include <pebble.h>
 #include <stdlib.h> // for abs() method
 #define TAP_NOT_DATA false
+#define NUMSAMPLES 200
 
 static Window *s_main_window;
 static TextLayer *s_output_layer;
 // should this be declared in main, to save memory?
 int gatherStats = 0;
-int accelSamples [100][4]; //fourth is for absolute sum of three places
-long accelTimeStamp [100]; //is a long actually big enough to hold these? I dunno, seems to work now
+int accelSamples [NUMSAMPLES][4]; //fourth is for absolute sum of three places
+// long accelTimeStamp [100]; //is a long actually big enough to hold these? I dunno, seems to work now
 
 static void data_process(){ // only calculates beginning of longest run at the moment
   // should for end of longest run too
   int longestRun = 0;
   int thisRun = 0;
-  int longIndex = 0;
+  int longIndex = 0; longIndex++; longIndex--;
   int thisIndex = 0;
   bool firstTime = true; 
   // loop through whole data set, find longest run of decreasing values
-  for(int i = 0; i < 100 - 3; i += 2){
+  for(int i = 0; i < NUMSAMPLES - 3; i += 2){
     // checks if 3 consecutive values are increasing
     if (accelSamples[i][3] < accelSamples[i+1][3] &&
         accelSamples[i+1][3] < accelSamples[i+2][3]) {
@@ -44,8 +45,8 @@ static void data_process(){ // only calculates beginning of longest run at the m
     }
   }
   // output results of data
-  printf("Run Length (25 samples a second): %5d\tLongest run start time: %10li", 
-         longestRun, accelTimeStamp[longIndex]);
+  printf("Run Length (25 samples a second): %5d", //\tLongest run start time: %10li taken out
+         longestRun); // , accelTimeStamp[longIndex] taken out
 }
 
 static void data_handler(AccelData *data, uint32_t num_samples) {
@@ -53,16 +54,19 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   static char s_buffer[128];
   
   // Compose string of all data
-  if (gatherStats < 100){
+  if (gatherStats < NUMSAMPLES){
     accelSamples[gatherStats][0] = data[0].x;
     accelSamples[gatherStats][1] = data[0].y;
     accelSamples[gatherStats][2] = data[0].z; 
     accelSamples[gatherStats][3] = abs(data[0].x) + abs(data[0].y) + abs(data[0].z);
-    accelTimeStamp [gatherStats] = data[0].timestamp;
+    // accelTimeStamp [gatherStats] = data[0].timestamp;
     
     //data[0].timestamp is a "uint64_t", which I just cast to a long for convenience
-    printf("time,X,Y,Z,abs:%10li\t%5d\t%5d\t%5d\t%5d", 
-           (long)data[0].timestamp, data[0].x, data[0].y, data[0].z,accelSamples[gatherStats][3]);
+    printf("Index,X,Y,Z\t %5d\t %5d\t %5d\t %5d\t %5d",  //,abs:\t%10li taken out
+           gatherStats, data[0].x, data[0].y, data[0].z,accelSamples[gatherStats][3]); //(long)data[0].timestamp,  taken out
+    
+    //printf("Index, X, Y, X\t%5d\t%5d" , gatherStats, data[0].x);
+    
     snprintf(s_buffer, sizeof(s_buffer), 
       "X,Y,Z\n> %d,%d,%d", 
       data[0].x, data[0].y, data[0].z

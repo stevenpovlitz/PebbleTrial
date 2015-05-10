@@ -4,16 +4,23 @@
         ""
     ],
     "companyName": "steven.povlitz@gmail.com",
-    "longName": "Wolf Gang See",
+    "longName": "Pebble Toss Metrics",
     "projectType": "native",
     "resources": {
-        "media": []
+        "media": [
+            {
+                "file": "images/PToss.png",
+                "menuIcon": true,
+                "name": "Menu_Image",
+                "type": "png"
+            }
+        ]
     },
     "sdkVersion": "2",
-    "shortName": "Wolf Gang See",
+    "shortName": "Pebble Toss",
     "uuid": "19114513-1dfb-4c9c-90f7-0623d01223c7",
     "versionCode": 1,
-    "versionLabel": "1.0",
+    "versionLabel": "0.9",
     "watchapp": {
         "watchface": false
     }

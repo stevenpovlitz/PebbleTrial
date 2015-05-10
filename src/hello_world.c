@@ -11,6 +11,11 @@ bool unsubbed = false;
 
 static Window *s_main_window;
 static TextLayer *s_output_layer;
+
+// for post-collection and results window
+Window *window;
+TextLayer * text_layer;
+
 // should this be declared in main, to save memory?
 int gatherStats = 0;
 int accelSamples [NUMSAMPLES][4]; //fourth is for absolute sum of three places
@@ -19,7 +24,6 @@ int accelSamples [NUMSAMPLES][4]; //fourth is for absolute sum of three places
 static int find_throw_length(){
   int throwLength = 0;
 
-  
   // find a large val (prob start of throw) then find when ensuing dip aka throw
   // ends with a dramatic change in absolute acceleration
   for(int h = 10; h < NUMSAMPLES; h++){ // h not 0 to avoid initial vibs throwing off data
@@ -49,8 +53,14 @@ static int find_throw_length(){
 // output how high the pebble was thrown
 static void data_process(){ 
   float x = find_throw_length(); // get length of throw in # of samples
+  static char s_buffer[128];
   if (x == -1) {
     printf ("No peak found, try tossing harder next time.");
+    snprintf(s_buffer, sizeof(s_buffer), 
+             "No peak found. Try tossing harder next time.\n");
+  
+    //Show the data
+    text_layer_set_text(s_output_layer, s_buffer);
   }
   else {
     printf("Samples in throw: %d", (int)x);
@@ -61,11 +71,19 @@ static void data_process(){
     int aboveDec = (int)heightThrown;
     int belowDec = (int)(heightThrown * 100) - ((int)heightThrown) * 100;
     printf("Pebble was tossed %d.%d meters high.\n" , aboveDec, belowDec);
+    
+    
+    snprintf(s_buffer, sizeof(s_buffer), 
+      "Pebble tossed %3d.%d meters high!\n" , 
+             aboveDec, belowDec
+    );
+  
+    //Show the data
+    text_layer_set_text(s_output_layer, s_buffer);
   }
 }
 static void data_handler(AccelData *data, uint32_t num_samples) {
   // Long lived buffer
-  static char s_buffer[128];
   
   // Compose string of all data
   if (gatherStats < NUMSAMPLES){
@@ -78,14 +96,6 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
     printf("Index,X,Y,Z\t %5d\t %5d\t %5d\t %5d\t %5d",
            gatherStats, data[0].x, data[0].y, data[0].z,accelSamples[gatherStats][3]); 
     
-    // show xyz data on pebble screen
-    snprintf(s_buffer, sizeof(s_buffer), 
-      "X,Y,Z\n> %d,%d,%d", 
-      data[0].x, data[0].y, data[0].z
-    );
-  
-    //Show the data
-    text_layer_set_text(s_output_layer, s_buffer);
     gatherStats++; // increment index counter
   }
   else {
@@ -107,8 +117,8 @@ static void main_window_load(Window *window) {
 
   // Create output TextLayer
   s_output_layer = text_layer_create(GRect(5, 0, window_bounds.size.w - 10, window_bounds.size.h));
-  text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
-  text_layer_set_text(s_output_layer, "No data yet.");
+  text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
+  text_layer_set_text(s_output_layer, "Toss me up!\n");
   text_layer_set_overflow_mode(s_output_layer, GTextOverflowModeWordWrap);
   layer_add_child(window_layer, text_layer_get_layer(s_output_layer));
 }

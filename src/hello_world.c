@@ -6,7 +6,7 @@
 
 #include <pebble.h>
 #include <stdlib.h> // for abs() method
-#define TAP_NOT_DATA false
+bool unsubbed = false;
 #define NUMSAMPLES 200
 
 static Window *s_main_window;
@@ -16,39 +16,50 @@ int gatherStats = 0;
 int accelSamples [NUMSAMPLES][4]; //fourth is for absolute sum of three places
 // long accelTimeStamp [100]; //is a long actually big enough to hold these? I dunno, seems to work now
 
-static void data_process(){ // only calculates beginning of longest run at the moment
-  // should for end of longest run too
-  int longestRun = 0;
-  int thisRun = 0;
-  int longIndex = 0; longIndex++; longIndex--;
-  int thisIndex = 0;
-  bool firstTime = true; 
-  // loop through whole data set, find longest run of decreasing values
-  for(int i = 0; i < NUMSAMPLES - 3; i += 2){
-    // checks if 3 consecutive values are increasing
-    if (accelSamples[i][3] < accelSamples[i+1][3] &&
-        accelSamples[i+1][3] < accelSamples[i+2][3]) {
-      thisRun += 2;
-      if (firstTime == true){
-        thisIndex = i; // start of run value set only if its the start of a run
-        firstTime = false;
+// find num samples between max thrown height and impact with ground
+static int find_throw_length(){
+  int throwLength = 0;
+  int h = 10; // not 0 to avoid initial vibs throwing off data
+  
+  // find a large val (prob start of throw) then find when ensuing dip aka throw
+  // ends with a dramatic change in abs acceleration
+  while (h < NUMSAMPLES){
+    if (accelSamples[h][3] > 4000){ // high accel values = start of throw
+      int biggest = accelSamples[h][3];
+      printf("Biggest aka over 4000: %d", biggest);
+      int i = 0;
+      for(int j = 0; j < 10; j++){
+        if (accelSamples[h+j][3] >= biggest){
+          i = h+j; // i is highest of values up to 10 after an over 4000 value
+          biggest = accelSamples[h+j][3];
+        }
       }
+      for(i = i+5; i < NUMSAMPLES - 2; i++){ // start looking for end of throw
+        if((accelSamples[i][3] - accelSamples[i+1][3]) > 2000){ //dramatic change in accel
+          printf("i:%d h:%d" , i, h); // log out the data we want to work with
+          throwLength = i - h; // throw end - throw start
+          return throwLength;
+        }
+      } 
     }
-    else {
-      firstTime = true;
-      if (thisRun > longestRun) {
-        longestRun = thisRun;
-        longIndex = thisIndex;
-        thisRun = 0;
-        thisIndex = 0;
-      }
-    }
+    h++;
   }
-  // output results of data
-  printf("Run Length (25 samples a second): %5d", //\tLongest run start time: %10li taken out
-         longestRun); // , accelTimeStamp[longIndex] taken out
+  return -1;;
 }
 
+// output how high the pebble was thrown
+static void data_process(){ 
+  int x = find_throw_length(); // get length of throw in # of samples
+  if (x == -1) {
+    printf ("No peak found, try tossing harder next time.");
+  }
+  else {
+    printf("Samples in throw: %d", x);
+    // should calc and store and output as a float
+    double heightThrown = ((double)x) / 2.0 / 25.0 * 9.8; // find in meters height thrown
+    printf ("Pebble was tossed %4d meters high.\n" , (int)(heightThrown * 100));
+  }
+}
 static void data_handler(AccelData *data, uint32_t num_samples) {
   // Long lived buffer
   static char s_buffer[128];
@@ -79,36 +90,14 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   else {
     // maybe later I can add some text to print out to the user (ie watch screen)
     accel_data_service_unsubscribe();
+    unsubbed = true;
+    
     // unsubscribe from accel data, saves battery here
     printf("Done collecting data");
+    // vibrate to let user know data collection is done
+    vibes_long_pulse();
     //implements calculation function, uses the data
     data_process();
-  }
-}
-
-static void tap_handler(AccelAxisType axis, int32_t direction) {
-  switch (axis) {
-  case ACCEL_AXIS_X:
-    if (direction > 0) {
-      text_layer_set_text(s_output_layer, "X axis positive.");
-    } else {
-      text_layer_set_text(s_output_layer, "X axis negative.");
-    }
-    break;
-  case ACCEL_AXIS_Y:
-    if (direction > 0) {
-      text_layer_set_text(s_output_layer, "Y axis positive.");
-    } else {
-      text_layer_set_text(s_output_layer, "Y axis negative.");
-    }
-    break;
-  case ACCEL_AXIS_Z:
-    if (direction > 0) {
-      text_layer_set_text(s_output_layer, "Z axis positive.");
-    } else {
-      text_layer_set_text(s_output_layer, "Z axis negative.");
-    }
-    break;
   }
 }
 
@@ -138,29 +127,19 @@ static void init() {
   });
   window_stack_push(s_main_window, true);
 
-  // Use tap service? If not, use data service
-  if (TAP_NOT_DATA) {
-    // Subscribe to the accelerometer tap service
-    accel_tap_service_subscribe(tap_handler);
-  } else {
-    // Subscribe to the accelerometer data service
-    int num_samples = 1;
-    accel_data_service_subscribe(num_samples, data_handler);
+  // Subscribe to the accelerometer data service
+  int num_samples = 1;
+  accel_data_service_subscribe(num_samples, data_handler);
 
-    // Choose update rate
-    accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
-  }
+  // Choose update rate
+  accel_service_set_sampling_rate(ACCEL_SAMPLING_25HZ);
 }
 
 static void deinit() {
   // Destroy main Window
   window_destroy(s_main_window);
-
-  if (TAP_NOT_DATA) {
-    accel_tap_service_unsubscribe();
-  } else {
-    // accel_data_service_unsubscribe();
-    // moved above for when 100 samples (10 seconds) is hit for battery concerns
+  if (unsubbed == false){
+    accel_data_service_unsubscribe();
   }
 }
 
